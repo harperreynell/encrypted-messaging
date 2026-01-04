@@ -1,12 +1,9 @@
 #include "crypto/crypto.h"
 #include <iostream>
 
-void printvector(std::vector<uint8_t> msg) {
-    for(int i = 0; i < msg.size(); i++) {
-        std::cout << msg[i];
-    }
-
-    std::cout << std::endl;
+std::vector<uint8_t> str_to_uint8t(std::string messagetext) {
+    std::vector<uint8_t> msg(messagetext.begin(), messagetext.end());
+    return msg;
 }
 
 int main() {
@@ -18,12 +15,18 @@ int main() {
     user1.deriveSessionKey(user1keys, user2keys.publicKey, true);
     user2.deriveSessionKey(user2keys, user1keys.publicKey, false);
 
-    std::string messagetext = "Hello WoRLd!";
-    std::vector<uint8_t> msg(messagetext.begin(), messagetext.end());
+    std::vector<std::string> messages = {"Hello world!", "Hello, what is your name", "My name is Heinz Doofenschmirtz:)"};
 
-    auto enc = user1.encrypt(msg);
-    std::cout << enc.data() << '\n';
+    for(int i = 0; i < messages.size(); i++) {
+        std::string messagetext = messages[i];
+        std::cout << "Message before encryption: " << messagetext << "\n";
 
-    auto dec = user2.decrypt(enc);
-    std::cout << dec.data() << '\n';
+        std::vector<uint8_t> msg(messagetext.begin(), messagetext.end());
+
+        EncryptedPacket pkt = user1.encryptPacket(msg);
+        std::cout << "Message efter encryption: " << pkt.ciphertext.data() << "; Nonce: " << pkt.counter << '\n';
+
+        auto dec = user2.decryptPacket(pkt);
+        std::cout << "Message after decryption: " << dec.data() << "\n\n\n";
+    }
 }

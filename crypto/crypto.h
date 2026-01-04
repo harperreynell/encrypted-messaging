@@ -3,6 +3,7 @@
 #include <array>
 #include <vector>
 #include <cstdint>
+#include "../protocol/packet.h"
 
 struct KeyPair {
     std::array<unsigned char, 32> publicKey;
@@ -23,6 +24,9 @@ public:
 
     std::vector<unsigned char> encrypt(const std::vector<unsigned char>& data);
     std::vector<unsigned char> decrypt(const std::vector<unsigned char>& data);
+
+    EncryptedPacket encryptPacket(const std::vector<uint8_t>& plaintext);
+    std::vector<uint8_t> decryptPacket(const EncryptedPacket& packet);
 
 private:
     std::array<unsigned char, 32> txKey;

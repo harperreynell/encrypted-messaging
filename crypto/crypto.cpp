@@ -50,18 +50,17 @@ void CryptoSession::makeNonce(uint64_t counter, uint8_t nonce[12]) {
     std::memcpy(nonce + 4, &counter, sizeof(counter));
 }
 
-std::vector<uint8_t> CryptoSession::encrypt(const std::vector<uint8_t>& plaintext) {
+EncryptedPacket CryptoSession::encryptPacket(const std::vector<uint8_t>& plaintext) {
+    EncryptedPacket pkt;
+    pkt.counter = txNonceCounter++;
     uint8_t nonce[12];
-    makeNonce(txNonceCounter++, nonce);
+    makeNonce(pkt.counter, nonce);
 
-    std::vector<uint8_t> ciphertext(
-        plaintext.size() + crypto_aead_chacha20poly1305_ietf_ABYTES
-    );
+    pkt.ciphertext.resize(plaintext.size() + crypto_aead_chacha20poly1305_ietf_ABYTES);
 
     unsigned long long ciphertextlen;
-
     crypto_aead_chacha20poly1305_ietf_encrypt(
-        ciphertext.data(),
+        pkt.ciphertext.data(),
         &ciphertextlen,
         plaintext.data(),
         plaintext.size(),
@@ -72,24 +71,29 @@ std::vector<uint8_t> CryptoSession::encrypt(const std::vector<uint8_t>& plaintex
         txKey.data()
     );
 
-    ciphertext.resize(ciphertextlen);
-    return ciphertext;
+    pkt.ciphertext.resize(ciphertextlen);
+    return pkt;
 }
 
-std::vector<uint8_t> CryptoSession::decrypt(const std::vector<uint8_t>& ciphertext) {
+std::vector<uint8_t> CryptoSession::decryptPacket(const EncryptedPacket& pkt) {
+    if(pkt.counter < rxNonceCounter) {
+        throw std::runtime_error("Replay detected");
+    }
+
+    rxNonceCounter = pkt.counter + 1;
+
     uint8_t nonce[12];
-    makeNonce(rxNonceCounter++, nonce);
-
-    std::vector<uint8_t> plaintext(ciphertext.size());
-
+    makeNonce(pkt.counter, nonce);
+    
+    std::vector<uint8_t> plaintext(pkt.ciphertext.size());
     unsigned long long plaintextlen;
 
     if(crypto_aead_chacha20poly1305_ietf_decrypt(
         plaintext.data(),
         &plaintextlen,
         nullptr,
-        ciphertext.data(),
-        ciphertext.size(),
+        pkt.ciphertext.data(),
+        pkt.ciphertext.size(),
         nullptr,
         0,
         nonce,
