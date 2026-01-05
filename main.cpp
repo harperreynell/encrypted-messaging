@@ -1,10 +1,6 @@
 #include "crypto/crypto.h"
+#include "protocol/packet.h"
 #include <iostream>
-
-std::vector<uint8_t> str_to_uint8t(std::string messagetext) {
-    std::vector<uint8_t> msg(messagetext.begin(), messagetext.end());
-    return msg;
-}
 
 int main() {
     CryptoSession user1, user2;
@@ -15,18 +11,24 @@ int main() {
     user1.deriveSessionKey(user1keys, user2keys.publicKey, true);
     user2.deriveSessionKey(user2keys, user1keys.publicKey, false);
 
-    std::vector<std::string> messages = {"Hello world!", "Hello, what is your name", "My name is Heinz Doofenschmirtz:)"};
+    std::vector<std::string> messages = {"Hello world!", "Hello, what is your name?", "My name is Heinz Doofenschmirtz:)"};
 
     for(int i = 0; i < messages.size(); i++) {
         std::string messagetext = messages[i];
         std::cout << "Message before encryption: " << messagetext << "\n";
 
-        std::vector<uint8_t> msg(messagetext.begin(), messagetext.end());
+        TextPacket tpkt;
+        tpkt.header.type = PacketType::text;
+        tpkt.payload.assign(messagetext.begin(), messagetext.end());
+        tpkt.header.payloadsize = tpkt.payload.size();
+        auto bytes = serializePacket(tpkt);
 
-        EncryptedPacket pkt = user1.encryptPacket(msg);
+        EncryptedPacket pkt = user1.encryptPacket(bytes);
         std::cout << "Message efter encryption: " << pkt.ciphertext.data() << "; Nonce: " << pkt.counter << '\n';
 
-        auto dec = user2.decryptPacket(pkt);
-        std::cout << "Message after decryption: " << dec.data() << "\n\n\n";
+        auto decbytes = user2.decryptPacket(pkt);
+        TextPacket dpkt = deserializePacket(decbytes);
+        std::string message(dpkt.payload.begin(), dpkt.payload.end());
+        std::cout << "Message after decryption: " << message << "\n\n\n";
     }
 }
