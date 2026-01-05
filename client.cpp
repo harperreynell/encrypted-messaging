@@ -9,6 +9,7 @@
 #include "protocol/packet.h"
 #include "crypto/crypto.h"
 #include "transport/transport.h"
+#include "iparser/iparser.h"
 
 void recvLoop(int sock, CryptoSession* crypto) {
     while (true) {
@@ -23,13 +24,33 @@ void recvLoop(int sock, CryptoSession* crypto) {
         auto plaintext = crypto->decryptPacket(epkt);
         TextPacket tpkt = deserializePacket(plaintext);
 
-        std::string msg(tpkt.payload.begin(), tpkt.payload.end());
-        std::cout << "\r" << msg << "\n> " << std::flush;
+        if (tpkt.header.type != PacketType::text)
+            continue;
+
+        if (tpkt.payload.size() < 1)
+            continue;
+
+        uint8_t namelen = tpkt.payload[0];
+        if (tpkt.payload.size() < 1 + namelen) continue;
+
+        std::string username(tpkt.payload.begin() + 1, tpkt.payload.begin() + 1 + namelen);
+
+        std::string msg(tpkt.payload.begin() + 1 + namelen, tpkt.payload.end());
+
+        std::time_t now = std::time(nullptr);
+        std::tm tm = *std::localtime(&now);
+
+        char buf[32];
+        std::strftime(buf, sizeof(buf), "%d/%m/%Y:%H:%M", &tm);
+
+        std::cout << "\r" << "[ " << buf << " | " << username << " ] " << msg << "\n> " << std::flush;
     }
 }
 
-int main() {
+int main(int argc, char** argv) { 
     int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+
+    InputParser input(argc, argv);
 
     sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
@@ -46,6 +67,46 @@ int main() {
     recvAll(clientSocket, serverpub.data(), 32);
     sendAll(clientSocket, clientKeys.publicKey.data(), 32);
     crypto.deriveSessionKey(clientKeys, serverpub, true);
+
+    if (!input.cmdOptionExists("-u")) {
+        throw std::runtime_error("No username provided");
+    }
+
+    std::string username = input.getCmdOption("-u");
+    TextPacket pkt_u;
+    pkt_u.header.type = PacketType::handshake;
+    pkt_u.payload.assign(username.begin(), username.end());
+    pkt_u.header.payloadsize = pkt_u.payload.size();
+
+    auto bytes_u = serializePacket(pkt_u);
+    EncryptedPacket epkt_u = crypto.encryptPacket(bytes_u);
+    auto raw_u = serializeEncryptedPacket(epkt_u);
+
+    uint32_t size = htonl(raw_u.size());
+    sendAll(clientSocket, (uint8_t*)&size, 4);
+    sendAll(clientSocket, raw_u.data(), raw_u.size());
+
+    uint32_t netsize;
+    recvAll(clientSocket, (uint8_t*)&netsize, 4);
+    uint32_t c_size = ntohl(netsize);
+
+    std::vector<uint8_t> raw(c_size);
+    recvAll(clientSocket, raw.data(), c_size);
+
+    EncryptedPacket epkt= deserializeEncryptedPacket(raw);
+    auto plain = crypto.decryptPacket(epkt);
+    TextPacket tpkt = deserializePacket(plain);
+
+    if (tpkt.header.type != PacketType::control) {
+        std::cerr << "Protocol error\n";
+        return -1;
+    }
+
+    std::string ans(tpkt.payload.begin(), tpkt.payload.end());
+    if (ans != "OK") {
+        std::cerr << "Username exists: " << ans << "\n";
+        return -1;
+    }
 
     std::thread(recvLoop, clientSocket, &crypto).detach();
 

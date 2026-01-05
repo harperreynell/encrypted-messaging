@@ -24,7 +24,7 @@ int main() {
         auto bytes = serializePacket(tpkt);
 
         EncryptedPacket pkt = user1.encryptPacket(bytes);
-        std::cout << "Message efter encryption: " << pkt.ciphertext.data() << "; Nonce: " << pkt.counter << '\n';
+        std::cout << "Message efter encryption: " << pkt.ciphertext.data() << "; Nonce: " << pkt.nonce.data() << '\n';
 
         auto decbytes = user2.decryptPacket(pkt);
         TextPacket dpkt = deserializePacket(decbytes);

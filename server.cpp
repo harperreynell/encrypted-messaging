@@ -21,7 +21,7 @@ int main() {
 
     while(true) {
         int clientSocket = accept(serverSocket, nullptr, nullptr);
-        std::cout << "Client connected\n";
+        broadcastSystem("Client disconnected", clientSocket);
         std::thread(handleClient, clientSocket).detach();
     }
 }
