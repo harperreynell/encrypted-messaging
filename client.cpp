@@ -10,7 +10,6 @@
 
 int main() {
     int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
-    CryptoSession crypto;
 
     sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
@@ -19,37 +18,31 @@ int main() {
 
     connect(clientSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
     std::cout << "Connected to the server\n";
+
+    CryptoSession crypto;
     KeyPair clientKeys = crypto.generateKeyPair();
 
-
-    std::array<uint8_t, 32> serverPub;
-    recvAll(clientSocket, serverPub.data(), 32);
-
+    std::array<uint8_t, 32> serverpub;
+    recvAll(clientSocket, serverpub.data(), 32);
     sendAll(clientSocket, clientKeys.publicKey.data(), 32);
+    crypto.deriveSessionKey(clientKeys, serverpub, true);
 
-    crypto.deriveSessionKey(clientKeys, serverPub, true);
+    while (true) {
+        std::string text;
+        std::getline(std::cin, text);
+        if (text == "exit") break;
 
-    while(true) {
-        std::string messagetext;
-        std::getline(std::cin, messagetext);
-        if(messagetext == "stop") {
-            break;
-        }
-        std::cout << "Sending message: " << messagetext << '\n';
+        TextPacket pkt;
+        pkt.header.type = PacketType::text;
+        pkt.payload.assign(text.begin(), text.end());
+        pkt.header.payloadsize = pkt.payload.size();
 
-        TextPacket tpkt;
-        tpkt.header.type = PacketType::text;
-        tpkt.payload.assign(messagetext.begin(), messagetext.end());
-        tpkt.header.payloadsize = tpkt.payload.size();
+        auto bytes = serializePacket(pkt);
+        EncryptedPacket enc = crypto.encryptPacket(bytes);
+        auto raw = serializeEncryptedPacket(enc);
 
-        auto bytes = serializePacket(tpkt);
-        EncryptedPacket pkt = crypto.encryptPacket(bytes);
-
-        auto raw = serializeEncryptedPacket(pkt);
-        uint32_t totalsize = raw.size();
-        uint32_t netsize = htonl(totalsize);
-
-        sendAll(clientSocket, (uint8_t*)&netsize, sizeof(netsize));
+        uint32_t size = htonl(raw.size());
+        sendAll(clientSocket, (uint8_t*)&size, 4);
         sendAll(clientSocket, raw.data(), raw.size());
     }
 
