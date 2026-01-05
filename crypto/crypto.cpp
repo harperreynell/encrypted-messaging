@@ -3,9 +3,7 @@
 #include <cstring>
 #include <stdexcept>
 
-CryptoSession::CryptoSession() 
-    : txNonceCounter(0), 
-    rxNonceCounter(0) {
+CryptoSession::CryptoSession() {
     if(sodium_init() < 0) {
         throw std::runtime_error("Libsodium init failed");
     }
@@ -45,16 +43,9 @@ void CryptoSession::deriveSessionKey(const KeyPair& local, const std::array<uint
     }
 }
 
-void CryptoSession::makeNonce(uint64_t counter, uint8_t nonce[12]) {
-    std::memset(nonce, 0, 12);
-    std::memcpy(nonce + 4, &counter, sizeof(counter));
-}
-
 EncryptedPacket CryptoSession::encryptPacket(const std::vector<uint8_t>& plaintext) {
     EncryptedPacket pkt;
-    pkt.counter = txNonceCounter++;
-    uint8_t nonce[12];
-    makeNonce(pkt.counter, nonce);
+    randombytes_buf(pkt.nonce.data(), pkt.nonce.size());
 
     pkt.ciphertext.resize(plaintext.size() + crypto_aead_chacha20poly1305_ietf_ABYTES);
 
@@ -67,7 +58,7 @@ EncryptedPacket CryptoSession::encryptPacket(const std::vector<uint8_t>& plainte
         nullptr,
         0,
         nullptr,
-        nonce,
+        pkt.nonce.data(),
         txKey.data()
     );
 
@@ -75,16 +66,7 @@ EncryptedPacket CryptoSession::encryptPacket(const std::vector<uint8_t>& plainte
     return pkt;
 }
 
-std::vector<uint8_t> CryptoSession::decryptPacket(const EncryptedPacket& pkt) {
-    if(pkt.counter < rxNonceCounter) {
-        throw std::runtime_error("Replay detected");
-    }
-
-    rxNonceCounter = pkt.counter + 1;
-
-    uint8_t nonce[12];
-    makeNonce(pkt.counter, nonce);
-    
+std::vector<uint8_t> CryptoSession::decryptPacket(const EncryptedPacket& pkt) {  
     std::vector<uint8_t> plaintext(pkt.ciphertext.size());
     unsigned long long plaintextlen;
 
@@ -96,7 +78,7 @@ std::vector<uint8_t> CryptoSession::decryptPacket(const EncryptedPacket& pkt) {
         pkt.ciphertext.size(),
         nullptr,
         0,
-        nonce,
+        pkt.nonce.data(),
         rxKey.data()
     ) != 0) {
         throw std::runtime_error("Decryption failed");

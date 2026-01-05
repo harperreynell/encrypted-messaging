@@ -4,7 +4,7 @@
 #include <cstdint>
 
 struct EncryptedPacket {
-    uint64_t counter;
+    std::array<uint8_t, 12> nonce;
     std::vector<uint8_t> ciphertext;
 };
 

@@ -49,8 +49,7 @@ TextPacket deserializePacket(const std::vector<uint8_t>& data) {
 std::vector<uint8_t> serializeEncryptedPacket(const EncryptedPacket& pkt) {
     std::vector<uint8_t> out;
 
-    for (int i = 7; i >= 0; --i)
-        out.push_back((pkt.counter >> (i * 8)) & 0xFF);
+    out.insert(out.end(), pkt.nonce.begin(), pkt.nonce.end());
 
     uint32_t len = pkt.ciphertext.size();
     out.push_back((len >> 24) & 0xFF);
@@ -63,17 +62,25 @@ std::vector<uint8_t> serializeEncryptedPacket(const EncryptedPacket& pkt) {
 }
 
 EncryptedPacket deserializeEncryptedPacket(const std::vector<uint8_t>& data) {
-    if(data.size() < 12) throw std::runtime_error("Packet too small");
+    if (data.size() < 16)
+        throw std::runtime_error("Encrypted packet too small");
 
     EncryptedPacket pkt;
-    pkt.counter = 0;
-    for(int i = 0; i < 8; ++i) pkt.counter = (pkt.counter << 8) | data[i];
+    std::memcpy(pkt.nonce.data(), data.data(), pkt.nonce.size());
 
-    uint32_t len = 0;
-    for(int i = 0; i < 4; ++i) len = (len << 8) | data[8+i];
+    uint32_t len =
+        (uint32_t(data[12]) << 24) |
+        (uint32_t(data[13]) << 16) |
+        (uint32_t(data[14]) << 8)  |
+        (uint32_t(data[15]));
 
-    if(data.size() < 12 + len) throw std::runtime_error("Incomplete packet");
+    if (data.size() != 16 + len)
+        throw std::runtime_error("Encrypted packet size mismatch");
 
-    pkt.ciphertext.assign(data.begin()+12, data.begin()+12+len);
+    pkt.ciphertext.assign(
+        data.begin() + 16,
+        data.end()
+    );
+
     return pkt;
 }

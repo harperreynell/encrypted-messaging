@@ -30,10 +30,5 @@ public:
 
 private:
     std::array<unsigned char, 32> txKey;
-    std::array<unsigned char, 32> rxKey; 
-
-    uint64_t txNonceCounter;
-    uint64_t rxNonceCounter;
-
-    void makeNonce(uint64_t counter, uint8_t nonce[12]);
+    std::array<unsigned char, 32> rxKey;
 };

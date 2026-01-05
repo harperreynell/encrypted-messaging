@@ -1,5 +1,7 @@
 #include "session.h"
+
 #include <mutex>
+#include <algorithm>
 
 std::vector<ClientInfo> clients;
 std::mutex clientsMutex;
@@ -34,16 +36,21 @@ void handleClient(int clientSocket) {
         std::string message(pkt.payload.begin(), pkt.payload.end());
         std::cout << "Received: " << message << "\n";
 
-        std::lock_guard<std::mutex> lock(clientsMutex);
-        for (auto& other : clients) {
+        std::vector<ClientInfo> snapshot;
+        {
+            std::lock_guard<std::mutex> lock(clientsMutex);
+            snapshot = clients;
+        }
+        for (auto& other : snapshot) {
             if (other.socket == client.socket) continue;
 
             EncryptedPacket out = other.session.encryptPacket(plaintext);
             auto rawOut = serializeEncryptedPacket(out);
 
             uint32_t size = htonl(rawOut.size());
-            sendAll(other.socket, (uint8_t*)&size, 4);
-            sendAll(other.socket, rawOut.data(), rawOut.size());
+            if (!sendAll(other.socket, (uint8_t*)&size, 4) ||
+                !sendAll(other.socket, rawOut.data(), rawOut.size())) {
+            }
         }
     }
 
