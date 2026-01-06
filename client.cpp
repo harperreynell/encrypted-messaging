@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
 
     sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(8080);
+    serverAddress.sin_port = htons(8082);
     serverAddress.sin_addr.s_addr = INADDR_ANY;
 
     connect(clientSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress));

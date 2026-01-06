@@ -31,13 +31,13 @@ int main() {
 
     sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(8080);
+    serverAddress.sin_port = htons(8082);
     serverAddress.sin_addr.s_addr = INADDR_ANY;
 
     bind(serverSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
     listen(serverSocket, 10);
 
-    std::cout << "Server listening on port 8080...\n";
+    std::cout << "Server listening on port 8082...\n";
 
     while(running) {
         sockaddr_in clientAddr;
