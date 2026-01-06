@@ -6,6 +6,8 @@
 
 #include "session/session.h"
 
+// handle stop methods
+
 int main() {
     int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -21,7 +23,6 @@ int main() {
 
     while(true) {
         int clientSocket = accept(serverSocket, nullptr, nullptr);
-        broadcastSystem("Client disconnected", clientSocket);
         std::thread(handleClient, clientSocket).detach();
     }
 }

@@ -11,6 +11,12 @@
 #include "transport/transport.h"
 #include "iparser/iparser.h"
 
+#define CLR_RESET   "\033[0m"
+#define CLR_USER    "\033[1;36m"
+#define CLR_MSG     "\033[0;37m"
+#define CLR_SYS     "\033[1;33m"
+
+
 void recvLoop(int sock, CryptoSession* crypto) {
     while (true) {
         uint32_t netsize;
@@ -43,7 +49,25 @@ void recvLoop(int sock, CryptoSession* crypto) {
         char buf[32];
         std::strftime(buf, sizeof(buf), "%d/%m/%Y:%H:%M", &tm);
 
-        std::cout << "\r" << "[ " << buf << " | " << username << " ] " << msg << "\n> " << std::flush;
+        bool system = (username == "*");
+
+        std::cout << "\r[" << buf << " | ";
+
+        if (system)
+            std::cout << CLR_SYS << username << CLR_RESET;
+        else
+            std::cout << CLR_USER << username << CLR_RESET;
+
+        std::cout << "] ";
+
+        if (system)
+            std::cout << CLR_SYS << msg << CLR_RESET;
+        else
+            std::cout << CLR_MSG << msg << CLR_RESET;
+
+        std::cout << "\n> " << std::flush;
+
+        // std::cout << "\r" << "[ " << buf << " | " << username << " ] " << msg << "\n> " << std::flush;
     }
 }
 
@@ -129,6 +153,6 @@ int main(int argc, char** argv) {
         sendAll(clientSocket, raw.data(), raw.size());
     }
 
-    shutdown(clientSocket, SHUT_RDWR);
+    shutdown(clientSocket, SHUT_RDWR); 
     close(clientSocket);
 }

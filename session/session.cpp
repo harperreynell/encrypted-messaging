@@ -58,13 +58,15 @@ void handleClient(int clientSocket) {
                 clients.push_back(client);
             }
 
-            std::time_t now = std::time(nullptr);
-            std::tm tm = *std::localtime(&now);
+            broadcastSystem("User " + client.username + " connected", client.socket);
 
-            char buf[32];
-            std::strftime(buf, sizeof(buf), "%d/%m/%Y:%H:%M", &tm);
+            // std::time_t now = std::time(nullptr);
+            // std::tm tm = *std::localtime(&now);
 
-            std::cout << "\r" << "[" << buf << " | " << "* " << "] " << "User " + client.username + " connected\n";
+            // char buf[32];
+            // std::strftime(buf, sizeof(buf), "%d/%m/%Y:%H:%M", &tm);
+
+            // std::cout << "\r" << "[" << buf << " | " << "* " << "] " << "User " + client.username + " connected\n";
 
             TextPacket ok;
             ok.header.type = PacketType::control;
