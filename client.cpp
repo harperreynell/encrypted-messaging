@@ -15,6 +15,7 @@
 #define CLR_USER    "\033[1;36m"
 #define CLR_MSG     "\033[0;37m"
 #define CLR_SYS     "\033[1;33m"
+#define PORT        8080
 
 
 void recvLoop(int sock, CryptoSession* crypto) {
@@ -87,7 +88,7 @@ int main(int argc, char** argv) {
 
     sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(8082);
+    serverAddress.sin_port = htons(PORT);
     serverAddress.sin_addr.s_addr = INADDR_ANY;
 
     connect(clientSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress));

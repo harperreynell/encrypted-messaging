@@ -8,6 +8,7 @@
 
 #include "session/session.h"
 
+#define PORT 8080
 std::atomic<bool> running(true);
 int serverSocketGlobal = -1;
 
@@ -31,13 +32,13 @@ int main() {
 
     sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(8082);
+    serverAddress.sin_port = htons(PORT);
     serverAddress.sin_addr.s_addr = INADDR_ANY;
 
     bind(serverSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
     listen(serverSocket, 10);
 
-    std::cout << "Server listening on port 8082...\n";
+    std::cout << "Server listening on port " << PORT << "...\n";
 
     while(running) {
         sockaddr_in clientAddr;
@@ -81,6 +82,6 @@ int main() {
     }
 
     close(serverSocket);
-    std::cout << "Server shutdown cleanly\n";
+    std::cout << "Server shutdown succeeded\n";
 
 }
