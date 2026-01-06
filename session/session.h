@@ -1,8 +1,10 @@
 #pragma once
 
 #include <vector>
-#include "../crypto/crypto.h"
 #include <mutex>
+#include <atomic>
+
+#include "../crypto/crypto.h"
 #include "../transport/transport.h"
 
 struct ClientInfo {
@@ -16,4 +18,4 @@ extern std::vector<ClientInfo> clients;
 extern std::mutex clientsMutex;
 
 void handleClient(int clientSocket);
-void broadcastSystem(const std::string& msg, int except);
+void broadcastSystem(const std::string& msg, int except = -1);

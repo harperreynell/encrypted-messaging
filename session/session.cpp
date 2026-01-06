@@ -58,16 +58,6 @@ void handleClient(int clientSocket) {
                 clients.push_back(client);
             }
 
-            broadcastSystem("User " + client.username + " connected", client.socket);
-
-            // std::time_t now = std::time(nullptr);
-            // std::tm tm = *std::localtime(&now);
-
-            // char buf[32];
-            // std::strftime(buf, sizeof(buf), "%d/%m/%Y:%H:%M", &tm);
-
-            // std::cout << "\r" << "[" << buf << " | " << "* " << "] " << "User " + client.username + " connected\n";
-
             TextPacket ok;
             ok.header.type = PacketType::control;
             std::string msg = "OK";
@@ -81,6 +71,9 @@ void handleClient(int clientSocket) {
             uint32_t size = htonl(raw.size());
             sendAll(clientSocket, (uint8_t*)&size, 4);
             sendAll(clientSocket, raw.data(), raw.size());
+
+            broadcastSystem("User " + client.username + " connected", client.socket);
+
 
             continue;
         }
@@ -119,9 +112,8 @@ void handleClient(int clientSocket) {
         }
     }
 
-    close(clientSocket);
     broadcastSystem("User " + client.username + " disconnected", clientSocket);
-
+    close(clientSocket);
     {
         std::lock_guard<std::mutex> lock(clientsMutex);
         clients.erase(
@@ -138,7 +130,7 @@ void handleClient(int clientSocket) {
     std::cout << "\r" << "[" << buf << " | " << "* " << "] " << "User " + client.username + " disconected\n";
 }
 
-void broadcastSystem(const std::string& msg, int except = -1) {
+void broadcastSystem(const std::string& msg, int except) {
     std::vector<ClientInfo> snapshot;
     {
         std::lock_guard<std::mutex> lock(clientsMutex);
@@ -162,7 +154,7 @@ void broadcastSystem(const std::string& msg, int except = -1) {
         EncryptedPacket pkt = c.session.encryptPacket(bytes);
         auto raw = serializeEncryptedPacket(pkt);
 
-        uint32_t size = ntohl(raw.size());
+        uint32_t size = htonl(raw.size());
         sendAll(c.socket, (uint8_t*)&size, 4);
         sendAll(c.socket, raw.data(), raw.size());
     }

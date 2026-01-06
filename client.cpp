@@ -30,6 +30,15 @@ void recvLoop(int sock, CryptoSession* crypto) {
         auto plaintext = crypto->decryptPacket(epkt);
         TextPacket tpkt = deserializePacket(plaintext);
 
+        if (tpkt.header.type == PacketType::control) {
+            std::string msg(tpkt.payload.begin(), tpkt.payload.end());
+            if (msg == "SERVER_SHUTDOWN") {
+                std::cout << "\nServer disconnected\n";
+                exit(0);
+            }
+            continue;
+        }
+
         if (tpkt.header.type != PacketType::text)
             continue;
 
@@ -42,6 +51,8 @@ void recvLoop(int sock, CryptoSession* crypto) {
         std::string username(tpkt.payload.begin() + 1, tpkt.payload.begin() + 1 + namelen);
 
         std::string msg(tpkt.payload.begin() + 1 + namelen, tpkt.payload.end());
+    
+
 
         std::time_t now = std::time(nullptr);
         std::tm tm = *std::localtime(&now);
@@ -66,8 +77,6 @@ void recvLoop(int sock, CryptoSession* crypto) {
             std::cout << CLR_MSG << msg << CLR_RESET;
 
         std::cout << "\n> " << std::flush;
-
-        // std::cout << "\r" << "[ " << buf << " | " << username << " ] " << msg << "\n> " << std::flush;
     }
 }
 
