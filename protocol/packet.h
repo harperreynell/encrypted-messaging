@@ -9,9 +9,12 @@ struct EncryptedPacket {
 };
 
 enum class PacketType : uint8_t {
-    handshake = 1,
-    text     = 2,
-    control   = 3
+    handshake,
+    control,
+    text,
+    room_key,
+    history_request,
+    history_chunk
 };
 
 struct PacketHeader {

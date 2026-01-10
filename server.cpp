@@ -5,6 +5,7 @@
 #include <thread>
 #include <signal.h>
 #include <atomic>
+#include <sodium.h>
 
 #include "session/session.h"
 
@@ -12,10 +13,9 @@
 std::atomic<bool> running(true);
 int serverSocketGlobal = -1;
 
-
 void signalHandler(int) {
     running = false;
-    if (serverSocketGlobal != -1) {
+    if(serverSocketGlobal != -1) {
         shutdown(serverSocketGlobal, SHUT_RDWR);
         close(serverSocketGlobal);
     }
@@ -25,12 +25,21 @@ int main() {
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
 
+    if(sodium_init() < 0) {
+        std::cerr << "libsodium init failed\n";
+        return 1;
+    }
+
+    history.clear();
+    loadHistory();
+    initRoomKey();
+
     int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     int opt = 1;
     setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     serverSocketGlobal = serverSocket;
 
-    sockaddr_in serverAddress;
+    sockaddr_in serverAddress{};
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(PORT);
     serverAddress.sin_addr.s_addr = INADDR_ANY;
@@ -43,12 +52,9 @@ int main() {
     while(running) {
         sockaddr_in clientAddr;
         socklen_t len = sizeof(clientAddr);
-        int clientSocket = accept(serverSocket,
-                          (sockaddr*)&clientAddr,
-                          &len);
-
-        if (clientSocket < 0) {
-            if (!running) break;
+        int clientSocket = accept(serverSocket, (sockaddr*)&clientAddr, &len);
+        if(clientSocket < 0) {
+            if(!running) break;
             continue;
         }
 
@@ -68,7 +74,7 @@ int main() {
     out.payload.assign(msg.begin(), msg.end());
     out.header.payloadsize = out.payload.size();
 
-    for (auto& c : snapshot) {
+    for(auto& c : snapshot) {
         auto bytes = serializePacket(out);
         auto enc = c.session.encryptPacket(bytes);
         auto raw = serializeEncryptedPacket(enc);
@@ -83,5 +89,4 @@ int main() {
 
     close(serverSocket);
     std::cout << "Server shutdown succeeded\n";
-
 }

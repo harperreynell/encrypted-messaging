@@ -5,6 +5,9 @@
 #include <unistd.h>
 #include <array>
 #include <thread>
+#include <vector>
+#include <chrono>
+#include <ctime>
 
 #include "protocol/packet.h"
 #include "crypto/crypto.h"
@@ -17,6 +20,39 @@
 #define CLR_SYS     "\033[1;33m"
 #define PORT        8080
 
+std::array<uint8_t, 32> roomKey;
+bool roomKeyReady = false;
+bool historyRequested = false;
+
+std::string decryptWithRoomKey(const std::vector<uint8_t>& encrypted) {
+    std::string result;
+    result.reserve(encrypted.size());
+    for (size_t i = 0; i < encrypted.size(); i++)
+        result.push_back(encrypted[i] ^ roomKey[i % roomKey.size()]);
+    return result;
+}
+
+void display(const std::string& username, const std::string& msg, bool system=false) {
+    std::time_t now = std::time(nullptr);
+    std::tm tm = *std::localtime(&now);
+    char buf[32];
+    std::strftime(buf, sizeof(buf), "%d/%m/%Y:%H:%M", &tm);
+
+    std::cout << "\r[" << buf << " | ";
+    if (system)
+        std::cout << CLR_SYS << username << CLR_RESET;
+    else
+        std::cout << CLR_USER << username << CLR_RESET;
+
+    std::cout << "] ";
+
+    if (system)
+        std::cout << CLR_SYS << msg << CLR_RESET;
+    else
+        std::cout << CLR_MSG << msg << CLR_RESET;
+
+    std::cout << "\n> " << std::flush;
+}
 
 void recvLoop(int sock, CryptoSession* crypto) {
     while (true) {
@@ -40,49 +76,63 @@ void recvLoop(int sock, CryptoSession* crypto) {
             continue;
         }
 
-        if (tpkt.header.type != PacketType::text)
+        if (tpkt.header.type == PacketType::room_key) {
+            if(tpkt.payload.size() != roomKey.size()) continue;
+            std::copy(tpkt.payload.begin(), tpkt.payload.end(), roomKey.begin());
+            roomKeyReady = true;
+
+            if(!historyRequested) {
+                TextPacket req;
+                req.header.type = PacketType::history_request;
+                req.header.payloadsize = 0;
+
+                auto bytes = serializePacket(req);
+                auto enc = crypto->encryptPacket(bytes);
+                auto rawReq = serializeEncryptedPacket(enc);
+
+                uint32_t sz = htonl(rawReq.size());
+                sendAll(sock, (uint8_t*)&sz, 4);
+                sendAll(sock, rawReq.data(), rawReq.size());
+
+                historyRequested = true;
+            }
             continue;
+        }
 
-        if (tpkt.payload.size() < 1)
-            continue;
+        if(tpkt.header.type == PacketType::history_chunk || tpkt.header.type == PacketType::text) {
+            if(tpkt.payload.size() < 1) continue;
+            uint8_t nameLen = tpkt.payload[0];
+            if(tpkt.payload.size() < 1 + nameLen) continue;
 
-        uint8_t namelen = tpkt.payload[0];
-        if (tpkt.payload.size() < 1 + namelen) continue;
+            std::string username(tpkt.payload.begin() + 1, tpkt.payload.begin() + 1 + nameLen);
+            std::vector<uint8_t> msgBytes(tpkt.payload.begin() + 1 + nameLen, tpkt.payload.end());
 
-        std::string username(tpkt.payload.begin() + 1, tpkt.payload.begin() + 1 + namelen);
+            std::string message;
 
-        std::string msg(tpkt.payload.begin() + 1 + namelen, tpkt.payload.end());
-    
+            bool systemMsg = (username == "*");
 
+            if(systemMsg) {
+                message.assign(msgBytes.begin(), msgBytes.end());
+                username = "SYSTEM";
+            } else if(roomKeyReady) {
+                message = decryptWithRoomKey(msgBytes);
+            } else {
+                message.assign(msgBytes.begin(), msgBytes.end());
+            }
 
-        std::time_t now = std::time(nullptr);
-        std::tm tm = *std::localtime(&now);
-
-        char buf[32];
-        std::strftime(buf, sizeof(buf), "%d/%m/%Y:%H:%M", &tm);
-
-        bool system = (username == "*");
-
-        std::cout << "\r[" << buf << " | ";
-
-        if (system)
-            std::cout << CLR_SYS << username << CLR_RESET;
-        else
-            std::cout << CLR_USER << username << CLR_RESET;
-
-        std::cout << "] ";
-
-        if (system)
-            std::cout << CLR_SYS << msg << CLR_RESET;
-        else
-            std::cout << CLR_MSG << msg << CLR_RESET;
-
-        std::cout << "\n> " << std::flush;
+            display(username, message, systemMsg);
+        }
     }
 }
 
 int main(int argc, char** argv) { 
+    historyRequested = false;
+    roomKeyReady = false;
     int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (clientSocket < 0) {
+        std::cerr << "Socket creation failed\n";
+        return -1;
+    }
 
     InputParser input(argc, argv);
 
@@ -91,15 +141,25 @@ int main(int argc, char** argv) {
     serverAddress.sin_port = htons(PORT);
     serverAddress.sin_addr.s_addr = INADDR_ANY;
 
-    connect(clientSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
+    if (connect(clientSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0) {
+        std::cerr << "Connection failed\n";
+        return -1;
+    }
+
     std::cout << "Connected to the server\n> ";
 
     CryptoSession crypto;
     KeyPair clientKeys = crypto.generateKeyPair();
 
     std::array<uint8_t, 32> serverpub;
-    recvAll(clientSocket, serverpub.data(), 32);
-    sendAll(clientSocket, clientKeys.publicKey.data(), 32);
+    if (!recvAll(clientSocket, serverpub.data(), 32)) {
+        std::cerr << "Failed to receive server public key\n";
+        return -1;
+    }
+    if (!sendAll(clientSocket, clientKeys.publicKey.data(), 32)) {
+        std::cerr << "Failed to send client public key\n";
+        return -1;
+    }
     crypto.deriveSessionKey(clientKeys, serverpub, true);
 
     if (!input.cmdOptionExists("-u")) {
@@ -121,13 +181,19 @@ int main(int argc, char** argv) {
     sendAll(clientSocket, raw_u.data(), raw_u.size());
 
     uint32_t netsize;
-    recvAll(clientSocket, (uint8_t*)&netsize, 4);
+    if (!recvAll(clientSocket, (uint8_t*)&netsize, 4)) {
+        std::cerr << "Failed to receive handshake response\n";
+        return -1;
+    }
+
     uint32_t c_size = ntohl(netsize);
-
     std::vector<uint8_t> raw(c_size);
-    recvAll(clientSocket, raw.data(), c_size);
+    if (!recvAll(clientSocket, raw.data(), c_size)) {
+        std::cerr << "Failed to receive handshake response data\n";
+        return -1;
+    }
 
-    EncryptedPacket epkt= deserializeEncryptedPacket(raw);
+    EncryptedPacket epkt = deserializeEncryptedPacket(raw);
     auto plain = crypto.decryptPacket(epkt);
     TextPacket tpkt = deserializePacket(plain);
 
