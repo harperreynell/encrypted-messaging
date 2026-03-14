@@ -13,6 +13,7 @@
 #define PORT 8080
 std::atomic<bool> running(true);
 int serverSocketGlobal = -1;
+ThreadPool* globalPool = nullptr;
 
 void signalHandler(int) {
     running = false;
@@ -45,12 +46,16 @@ int main() {
     serverAddress.sin_port = htons(PORT);
     serverAddress.sin_addr.s_addr = INADDR_ANY;
 
-    bind(serverSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
+    if (bind(serverSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0) {
+        std::cerr << "Bind failed\n";
+        return 1;
+    }
     listen(serverSocket, 10);
 
     std::cout << "Server listening on port " << PORT << "...\n";
 
-    ThreadPool pool(4);
+    ThreadPool pool(4, 50);
+    globalPool = &pool;
 
     while(running) {
         sockaddr_in clientAddr;
@@ -61,9 +66,12 @@ int main() {
             continue;
         }
 
-        pool.enqueue([clientSocket] {
+        if (!pool.enqueue([clientSocket] {
             handleClient(clientSocket);
-        });
+        })) {
+            std::cerr << "Task rejected: queue full\n";
+            close(clientSocket);
+        }
     }
 
     std::vector<ClientInfo> snapshot;
@@ -93,5 +101,6 @@ int main() {
     }
 
     close(serverSocket);
+    pool.printStats();
     std::cout << "Server shutdown succeeded\n";
 }
