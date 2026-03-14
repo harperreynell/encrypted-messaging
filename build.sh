@@ -28,3 +28,4 @@ printf "Done. Executable file in build/server.out\n"
 
 chmod +x build/*
 
+./build/server.out

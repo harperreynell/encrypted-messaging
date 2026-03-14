@@ -8,6 +8,7 @@
 #include <sodium.h>
 
 #include "session/session.h"
+#include "threadpool/threadpool.h"
 
 #define PORT 8080
 std::atomic<bool> running(true);
@@ -49,6 +50,8 @@ int main() {
 
     std::cout << "Server listening on port " << PORT << "...\n";
 
+    ThreadPool pool(4);
+
     while(running) {
         sockaddr_in clientAddr;
         socklen_t len = sizeof(clientAddr);
@@ -58,7 +61,9 @@ int main() {
             continue;
         }
 
-        std::thread(handleClient, clientSocket).detach();
+        pool.enqueue([clientSocket] {
+            handleClient(clientSocket);
+        });
     }
 
     std::vector<ClientInfo> snapshot;
