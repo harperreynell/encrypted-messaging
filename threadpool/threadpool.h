@@ -19,7 +19,7 @@ struct TaskMetadata {
 
 class ThreadPool {
 public:
-    ThreadPool(size_t threads, size_t max_q = 100)
+    ThreadPool(size_t threads, size_t max_q = 50)
         : stop(false), max_queue_size(max_q), created_threads(threads) {
 
         for (size_t i = 0; i < threads; ++i) {
